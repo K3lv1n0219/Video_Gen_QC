@@ -1,1 +1,349 @@
 # Video_Gen_QC
+
+A minimal experimental pipeline for **VLM-led quality inspection of generated
+robot manipulation videos**: task → initial-state image prompt → image →
+image-conditioned video prompt → video → independent QC.
+
+**Default: fully offline mock providers.** The demo produces valid schematic PNG/MP4
+fixtures. Mock providers perform no visual reasoning or task validation. Mock QC
+has `is_mock: true`, three `uncertain` checks, and returns **REVIEW**. Real APIs need
+explicit configuration **and** `--allow-paid`, including real VLM inspection calls.
+
+## Research motivation and boundary
+
+The research question is: **Does the visible video satisfy the requested task and
+visual constraints?** Videos may eventually feed perception, trajectory extraction,
+retargeting, or policy learning, but their outputs do not enter this evaluator.
+
+> The QC system evaluates observable video quality and task compliance.
+> It does not estimate robot executability.
+> It does not use downstream manipulation success as a QC criterion.
+
+Pose estimation success, simulation success, rewards, grasp outcomes, and robot
+execution outcomes are neither inputs, quality criteria, nor evaluation ground truth.
+QC receives the **original task directly**, optional reference/initial still images,
+and sampled video frames. Generated prompts and generator self-evaluation are excluded.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    T[Original task] --> P1[VLM: initial-state image prompt]
+    P1 --> I[Image generator]
+    T --> P2[VLM: video prompt]
+    I --> P2
+    E[Existing initial image] --> P2
+    P2 --> V[I2V generator]
+    I --> V
+    E --> V
+    V --> S[Uniform frame sampling]
+    X[Existing video] --> S
+    T --> Q[Independent VLM QC]
+    I --> Q
+    E --> Q
+    R[Optional reference image] --> Q
+    S --> Q
+    Q --> C[Validated evidence-level checks]
+    C --> D[Python policy: PASS / REVIEW / REJECT]
+```
+
+| Mode | Inputs | Work performed |
+| --- | --- | --- |
+| Full | Task | Image prompt → image → video prompt → video → QC |
+| Existing image | Task + initial image | Video prompt → video → QC |
+| QC-only | Task + video; optional still images | Sampling → QC |
+
+QC-only never constructs or calls generation providers. Existing-image mode skips
+both image prompting and image generation. Inactive providers need no credentials.
+Image prompting, video prompting, and QC have separate system instructions and
+stateless requests. A real provider service must preserve this context isolation.
+The video-prompt request includes the **actual initial image bytes** and original
+task, never the image prompt. Instructions preserve the task even when the image
+conflicts with it (for example, the wrong handedness).
+
+The small `src/video_gen_qc` package separates `schemas`, `config`, `prompts`,
+`frame_sampler`, `qc`, artifact handling, pipeline orchestration, CLI, and providers.
+`qc.py` accepts only task/visual evidence and a VLM; it imports no generation adapter.
+
+## Installation
+
+Python 3.10+ is required. From a checkout:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e '.[dev]'
+video-qc --help
+```
+
+Alternatively: `uv venv` and `uv pip install -e '.[dev]'`. Dependencies are PyAV,
+Pillow, Pydantic, PyYAML, and HTTPX; development checks use pytest and Ruff. PyAV
+wheels include video codec libraries on supported platforms, so no separate
+`ffmpeg` command is required. Initial installation needs package access; subsequent
+mock runs and tests need neither network access nor API credentials.
+
+If macOS Python 3.13 skips an editable installation's `.pth` file as hidden, use
+`python -m pip install '.[dev]'` or clear that file's hidden flag inside the virtual
+environment. The package source is `src/video_gen_qc`.
+
+## Offline demo and CLI
+
+The requested default command creates a unique directory under `outputs/`:
+
+```bash
+video-qc run --task examples/box_lift.json
+```
+
+To try all modes with known paths, use new, nonexistent output directories:
+
+```bash
+# Mode A
+video-qc run --task examples/box_lift.json --output-dir outputs/demo-full
+
+# Mode B
+video-qc run --task examples/box_lift.json \
+  --initial-image outputs/demo-full/initial_image.png \
+  --output-dir outputs/demo-existing-image
+
+# Mode C
+video-qc judge --task examples/box_lift.json \
+  --video outputs/demo-full/video.mp4 \
+  --output-dir outputs/demo-qc-only
+
+# Optional context for QC
+video-qc judge --task examples/box_lift.json \
+  --video outputs/demo-full/video.mp4 \
+  --initial-image outputs/demo-full/initial_image.png \
+  --reference-image path/to/reference.png
+```
+
+Both subcommands accept `--config`, `--output-root`, `--output-dir`, and
+`--allow-paid`. `--output-root` overrides the configured parent; `--output-dir`
+specifies an exact directory and takes precedence. Existing directories are
+rejected, never overwritten. `python -m video_gen_qc ...` is also supported.
+
+Completed inspections exit `0`, including REVIEW and REJECT. Runtime errors exit
+`2` with an explanation on stderr. Process success does not mean the video passed;
+read the report's `decision` field.
+
+## Task format
+
+Use JSON or YAML. Only `task_id` and `instruction` are required; constraint/event
+lists default to empty. Unknown fields, wrong types, and empty strings are rejected.
+Describe forbidden actions in the instruction or constraints. See
+[`examples/box_lift.json`](examples/box_lift.json) for the complete example.
+
+```json
+{
+  "task_id": "box_lift_001",
+  "instruction": "A right hand grasps the box, lifts it vertically from the table, and briefly holds it in the air.",
+  "scene_constraints": ["camera remains fixed", "box appearance remains consistent"],
+  "initial_state_constraints": ["box is upright on the table", "hand is not touching the box"],
+  "required_events": ["hand approaches the box", "hand grasps the box", "box leaves the table"]
+}
+```
+
+Task IDs are sanitized only for directory names. The authoritative task is saved
+in every run and supplied directly to QC.
+
+## Sampling, checks, and decisions
+
+Uniformly sample **16 decoded frame indices** by default, including the first and
+final frame. Short videos return all available frames without duplication; a
+one-frame video returns one sample. Requested counts must be at least two.
+Two sequential decoding passes provide bounded memory use and avoid trusting
+container frame-count metadata. Uniformity is by index, not elapsed time for VFR.
+
+Each saved sample has `frame_id`, `source_frame_index`, `timestamp_seconds`, and
+relative `path`. Timestamps preserve source presentation timestamps (PTS); they
+are not estimated by dividing index by FPS. Missing, negative, or non-monotonic
+sampled timestamps cause runtime errors. Only the first video stream is inspected;
+audio is ignored. **Unsampled moments are not inspected.**
+
+| Required check | Scope |
+| --- | --- |
+| `task_compliance` | Initial state, correct target/action, event order, forbidden actions, final visible state |
+| `scene_consistency` | Requested camera/background/layout consistency and visual identity; foreground motion is expected |
+| `visual_anomalies` | Visibly supported disappearance, deformation, identity/scale changes, jumps, or severe artifacts |
+
+Every check has `status`, `reason`, and `evidence_frames`:
+
+- `pass`: no explicit violation found in inspected evidence.
+- `fail`: visible evidence supports a violation.
+- `uncertain`: available visual evidence is insufficient.
+
+2D overlap does not confirm 3D penetration; occluded fingers are not missing
+fingers; hidden contact is not incorrect contact. Large changes across widely
+spaced samples alone do not establish an abrupt temporal jump. The VLM is instructed
+to use `uncertain` when evidence is insufficient and never certify hidden physics.
+
+Evidence refers to sampled **`frame_id`**, not source indices or still-image labels.
+Nonexistent, negative, duplicate, boolean, or string IDs are rejected. Pass/fail
+requires a cited sample; uncertain may have an empty list. Malformed JSON, missing
+checks, extra fields, VLM-provided overall decisions, and numerical confidence
+fields are rejected. There is no automatic repair, retry, or regeneration.
+
+Python applies the deterministic policy after validating the VLM's checks:
+
+```text
+any required fail                     → REJECT
+otherwise, any required uncertain     → REVIEW
+otherwise                            → PASS
+```
+
+The report contains the task ID, decision, checks, `is_mock`, provider/model,
+sampling manifest, and inspection-scope statement. No confidence or robotics scores.
+
+## Artifacts and reproducibility
+
+```text
+outputs/<UTC timestamp>_<task ID>_<unique suffix>/
+├── task.json
+├── image_prompt_request.json
+├── image_prompt.txt
+├── initial_image.png
+├── reference_image.png           # if supplied
+├── video_prompt_request.json
+├── video_prompt.txt
+├── video.mp4                     # QC-only preserves input extension
+├── sampled_frames.json           # IDs, original indices, PTS timestamps
+├── sampled_frames/frame_000.png  # plus other sampled frames
+├── qc_request.json               # isolated system instruction and evidence manifest
+├── vlm_raw_response.json         # raw VLM text inside a JSON envelope
+├── qc_report.json
+└── run_metadata.json             # versions, config, inputs, hashes, status
+```
+
+QC-only omits generation prompts/requests and absent still images. Existing-image
+mode omits image-prompt artifacts. Supplied images are decoded, EXIF-oriented, and
+saved as RGB PNG; supplied videos are copied unchanged. The mock video holds the
+initial image with a changing mock frame label; it does not simulate task success.
+
+Metadata records configuration (environment variable **names**, never values),
+active providers, input paths, UTC times, package/runtime versions, and SHA-256
+hashes of artifacts. Each prompt request is saved separately. Invalid QC content is
+saved before validation. Failed runs retain artifacts and `status: error`, with no
+quality report or synthetic failure check. Early input/config/provider preflight
+errors occur before an output directory exists.
+
+## Real providers and configuration
+
+[`configs/default.yaml`](configs/default.yaml) mirrors built-in defaults. No config
+file is required for the installed CLI. Relative output paths resolve from the
+working directory. To opt into real VLM inspection, create `configs/real.yaml`:
+
+```yaml
+vlm:
+  provider: http
+  model: your-vision-model
+  endpoint_env: VIDEO_QC_VLM_URL
+  api_key_env: VIDEO_QC_VLM_KEY
+  timeout_seconds: 120.0
+image_generation:
+  provider: mock
+video_generation:
+  provider: mock
+qc:
+  sample_frames: 16
+output:
+  root: outputs
+```
+
+Set those environment variables using your shell or secret manager; the CLI does
+not load `.env` files. Then explicitly permit the configured real call:
+
+```bash
+video-qc judge --config configs/real.yaml --allow-paid \
+  --task examples/box_lift.json --video path/to/video.mp4
+```
+
+`http` implements a **provider-neutral bridge contract defined by this project**.
+It is not a drop-in vendor endpoint. Supply a compatible service, or implement the
+small interfaces in `providers/base.py` for a chosen vendor and register them in
+`providers/factory.py` and `ProviderConfig`. Live vendor integration and model
+accuracy have not been validated by the offline tests.
+
+### HTTP bridge contract
+
+Each call is one synchronous POST with `Authorization: Bearer <environment key>`.
+URLs must be HTTPS (local HTTP is allowed), without embedded credentials, query
+strings, or fragments. There are no redirects, retries, polling, or URL downloads.
+A vendor bridge may handle asynchronous vendor jobs internally; configure its timeout.
+
+VLM request:
+
+```json
+{
+  "model": "your-vision-model",
+  "purpose": "video_prompt",
+  "system": "Distinct instruction for this purpose",
+  "text": "JSON string with original_task and, for QC, sampling and image_labels",
+  "images": [{"label": "initial_image", "mime_type": "image/png", "data_base64": "..."}]
+}
+```
+
+VLM response: `{"text": "generated prompt or QC JSON encoded as a string"}`.
+Purposes are `image_prompt`, `video_prompt`, and `qc`. QC image labels are optional
+`reference_image`/`initial_image` and `frame_0`, `frame_1`, etc. The bridge must pass
+actual bytes to a vision-capable model, retain labels, and never inject generation
+history into QC. A QC response's text must encode this exact shape:
+
+```json
+{
+  "checks": {
+    "task_compliance": {"status": "uncertain", "reason": "Required contact is occluded in the available samples.", "evidence_frames": [5]},
+    "scene_consistency": {"status": "pass", "reason": "No clear background change is visible in these samples.", "evidence_frames": [0, 15]},
+    "visual_anomalies": {"status": "uncertain", "reason": "The interaction region is not sufficiently visible.", "evidence_frames": [5]}
+  }
+}
+```
+
+For generators, configure `provider: http`, `model`, `endpoint_env`, `api_key_env`,
+and optionally `timeout_seconds` in the corresponding section:
+
+| Operation | Request fields (in addition to `model`) | Response |
+| --- | --- | --- |
+| Image | `purpose: image_generation`, `prompt` | `{"image_base64": "<image bytes>"}` |
+| Video | `purpose: video_generation`, `prompt`, `initial_image` (same labeled image object above) | `{"video_base64": "<MP4 bytes>"}` |
+
+The image adapter decodes and saves PNG. The sampler validates returned videos
+before QC. All active real providers are preflighted before the first call.
+Missing secrets, failed requests, invalid media, and invalid VLM responses are
+runtime errors; no API call is faked or replaced by a mock success. HTTP errors
+omit response bodies/URLs that might echo secrets. No credentials were used in V1 testing.
+
+## Verification
+
+```bash
+python -m ruff check .
+python -m ruff format --check .
+python -m pytest -q
+video-qc run --task examples/box_lift.json
+```
+
+Tests cover parsing, endpoints/counts/PTS including variable frame rates, all 27
+decision-policy combinations, evidence/schema rejection, all CLI modes, actual-image
+conditioning, context isolation, skipped providers, paid gates, error artifacts,
+and HTTP handling through in-process mock transports. Network socket connections
+are blocked throughout the suite. These tests validate behavior, not VLM accuracy.
+
+## Limitations, extension points, and future evaluation
+
+V1 has no adaptive sampling, segmentation, optical flow, CLIP scoring, 3D/pose
+estimation, simulation, robot control, learning, multi-agent framework, or prompt
+regeneration loop. Sixteen frames can miss brief defects. There is no dense-video
+or audio reasoning, confidence calibration, or evaluation benchmark. Long videos
+require two sequential decode passes; the simple HTTP bridge sends media inline.
+
+The sampler can later support adaptive/dense inspection around interaction moments.
+Independent QC request construction and provider interfaces allow optional tools
+for background changes, camera motion, hand/object detection, scale consistency,
+and CLIP auxiliary signals, plus multi-model comparisons and separate regeneration
+experiments. These are future extensions; the VLM remains the primary reasoning
+layer and the original task remains authoritative.
+
+Future evaluation compares QC predictions against **human video annotations**, not
+robot execution. Build a held-out annotated dataset with per-defect labels, visible
+evidence locations, and annotator uncertainty. Measure per-defect precision/recall/F1,
+bad-video false acceptance, good-video retention, REVIEW rate, and evidence-localization
+correctness, accounting for sampling limits. No such accuracy claims are made by V1.

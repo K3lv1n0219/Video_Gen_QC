@@ -1,0 +1,11 @@
+vlm:
+  provider: mock
+  model: mock-vlm
+image_generation:
+  provider: mock
+video_generation:
+  provider: mock
+qc:
+  sample_frames: 16
+output:
+  root: outputs
