@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "video-gen-qc"
+version = "0.1.0"
+description = "Independent, VLM-led quality inspection for generated manipulation videos"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "av>=14,<17",
+  "Pillow>=10,<13",
+  "pydantic>=2.8,<3",
+  "PyYAML>=6,<7",
+  "httpx>=0.27,<1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "ruff>=0.9,<1"]
+
+[project.scripts]
+video-qc = "video_gen_qc.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

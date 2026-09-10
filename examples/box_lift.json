@@ -1,0 +1,18 @@
+{
+  "task_id": "box_lift_001",
+  "instruction": "A right hand enters from the right, grasps the box, lifts it vertically from the table, and briefly holds it in the air.",
+  "scene_constraints": [
+    "camera remains fixed",
+    "background remains unchanged",
+    "the box appearance remains consistent"
+  ],
+  "initial_state_constraints": [
+    "box is upright on the table",
+    "hand is initially not touching the box"
+  ],
+  "required_events": [
+    "hand approaches the box",
+    "hand grasps the box",
+    "box leaves the table"
+  ]
+}
