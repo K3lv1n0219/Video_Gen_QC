@@ -32,7 +32,9 @@ class VLM(ABC):
 
 class ImageGenerator(ABC):
     @abstractmethod
-    def generate(self, prompt: str, output_path: Path) -> Path:
+    def generate(
+        self, prompt: str, output_path: Path, *, reference_image: Path | None = None
+    ) -> Path:
         pass
 
 

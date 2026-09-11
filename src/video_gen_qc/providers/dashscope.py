@@ -13,8 +13,8 @@ from PIL import Image, UnidentifiedImageError
 from video_gen_qc.artifacts import write_json
 from video_gen_qc.config import ImageOptions, ProviderConfig, VideoOptions
 from video_gen_qc.errors import ConfigError, InputError, ProviderError
-from video_gen_qc.providers.base import ImageGenerator, VideoGenerator
-from video_gen_qc.providers.http import HTTPBridge
+from video_gen_qc.providers.base import ImageGenerator, ImageInput, VideoGenerator
+from video_gen_qc.providers.http import HTTPBridge, encode_image
 from video_gen_qc.schemas import parse_json
 
 IMAGE_ENDPOINT = "/services/aigc/multimodal-generation/generation"
@@ -155,8 +155,23 @@ class QwenImageGenerator(ImageGenerator):
         self.client = DashScopeClient(config, allow_paid=allow_paid, transport=transport)
         self.options = config.image_options or ImageOptions()
 
-    def generate(self, prompt: str, output_path: Path) -> Path:
+    def generate(
+        self, prompt: str, output_path: Path, *, reference_image: Path | None = None
+    ) -> Path:
         _require_new_output(output_path)
+        content = []
+        if reference_image is not None:
+            try:
+                encoded = encode_image(ImageInput("reference_image", reference_image))[
+                    "data_base64"
+                ]
+            except (OSError, ValueError, UnidentifiedImageError):
+                raise InputError("Qwen Image reference must be a readable local image.") from None
+            encoded_bytes = len(encoded) // 4 * 3 - (len(encoded) - len(encoded.rstrip("=")))
+            if encoded_bytes > 10 * 1024 * 1024:
+                raise InputError("Qwen Image reference exceeds 10 MB after PNG conversion.")
+            content.append({"image": f"data:image/png;base64,{encoded}"})
+        content.append({"text": prompt})
         parameters = self.options.model_dump(exclude_none=True)
         parameters["n"] = 1
         data = self.client.request(
@@ -164,7 +179,7 @@ class QwenImageGenerator(ImageGenerator):
             IMAGE_ENDPOINT,
             {
                 "model": self.client.config.model,
-                "input": {"messages": [{"role": "user", "content": [{"text": prompt}]}]},
+                "input": {"messages": [{"role": "user", "content": content}]},
                 "parameters": parameters,
             },
         )

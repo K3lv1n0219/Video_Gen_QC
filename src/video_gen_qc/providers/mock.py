@@ -57,7 +57,10 @@ class MockVLM(VLM):
 
 
 class MockImageGenerator(ImageGenerator):
-    def generate(self, prompt: str, output_path: Path) -> Path:
+    def generate(
+        self, prompt: str, output_path: Path, *, reference_image: Path | None = None
+    ) -> Path:
+        # Reference conditioning is intentionally not simulated by this offline fixture.
         image = Image.new("RGB", (640, 384), "#e8edf2")
         draw = ImageDraw.Draw(image)
         draw.rectangle((0, 250, 640, 384), fill="#9aa9b5")

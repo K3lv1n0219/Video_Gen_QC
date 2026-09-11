@@ -142,8 +142,15 @@ class HTTPImageGenerator(ImageGenerator):
     def __init__(self, bridge: HTTPBridge):
         self.bridge = bridge
 
-    def generate(self, prompt: str, output_path: Path) -> Path:
-        data = self.bridge.post({"purpose": "image_generation", "prompt": prompt})
+    def generate(
+        self, prompt: str, output_path: Path, *, reference_image: Path | None = None
+    ) -> Path:
+        payload = {"purpose": "image_generation", "prompt": prompt}
+        if reference_image is not None:
+            payload["reference_image"] = encode_image(
+                ImageInput("reference_image", reference_image)
+            )
+        data = self.bridge.post(payload)
         content = decode_media(data, "image_base64")
         try:
             with Image.open(io.BytesIO(content)) as image:

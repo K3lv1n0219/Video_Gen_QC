@@ -42,6 +42,9 @@ flowchart LR
     I --> Q
     E --> Q
     R[Optional reference image] --> Q
+    R --> P1
+    R --> I
+    R --> P2
     S --> Q
     Q --> C[Validated evidence-level checks]
     C --> D[Python policy: PASS / REVIEW / REJECT]
@@ -49,7 +52,7 @@ flowchart LR
 
 | Mode | Inputs | Work performed |
 | --- | --- | --- |
-| Full | Task | Image prompt → image → video prompt → video → QC |
+| Full | Task; optional reference image | Image prompt → generated/edited image → video prompt → video → QC |
 | Existing image | Task + initial image | Video prompt → video → QC |
 | QC-only | Task + video; optional still images | Sampling → QC |
 
@@ -60,6 +63,29 @@ stateless requests. A real provider service must preserve this context isolation
 The video-prompt request includes the **actual initial image bytes** and original
 task, never the image prompt. Instructions preserve the task even when the image
 conflicts with it (for example, the wrong handedness).
+
+`--initial-image` is the exact starting frame and skips image generation.
+In full mode, `--reference-image` also sends the actual reference pixels to Qwen
+Image (or the HTTP image bridge) to generate/edit the initial frame. The resulting
+`initial_image.png` is then supplied to both the video-prompt VLM and Wan.
+With `--initial-image`, the reference is only context for the VLM and QC.
+Wan receives one first frame: this option does not add a second reference image
+to Wan. Its first-frame mode and separate reference-media mode are mutually exclusive.
+The offline mock accepts a reference but does not simulate image editing.
+
+For example, preserve an existing scene while adding a hand at a task-specified scale:
+
+```bash
+video-qc run --task examples/box_lift_scale.json \
+  --reference-image path/to/scene.png \
+  --config configs/aliyun-beijing.yaml --allow-paid
+```
+
+Use `image_generation.image_options.size` to match the desired aspect ratio
+(for example `1280*960`). Put intended hand/box proportions in the original task
+so both generation and independent QC receive them. Describe hand length and palm
+width explicitly; “normal hand size” alone has no known physical scale in a still
+image. Occlusion and perspective may still prevent QC from assessing a ratio.
 
 The small `src/video_gen_qc` package separates `schemas`, `config`, `prompts`,
 `frame_sampler`, `qc`, artifact handling, pipeline orchestration, CLI, and providers.
@@ -480,7 +506,7 @@ and optionally `timeout_seconds` in the corresponding section:
 
 | Operation | Request fields (in addition to `model`) | Response |
 | --- | --- | --- |
-| Image | `purpose: image_generation`, `prompt` | `{"image_base64": "<image bytes>"}` |
+| Image | `purpose: image_generation`, `prompt`, optional `reference_image` (same labeled image object above) | `{"image_base64": "<image bytes>"}` |
 | Video | `purpose: video_generation`, `prompt`, `initial_image` (same labeled image object above) | `{"video_base64": "<MP4 bytes>"}` |
 
 The image adapter decodes and saves PNG. The sampler validates returned videos
@@ -524,3 +550,10 @@ robot execution. Build a held-out annotated dataset with per-defect labels, visi
 evidence locations, and annotator uncertainty. Measure per-defect precision/recall/F1,
 bad-video false acceptance, good-video retention, REVIEW rate, and evidence-localization
 correctness, accounting for sampling limits. No such accuracy claims are made by V1.
+
+The [2026-09-11 hand-scale experiment](docs/evaluations/hand-scale-ab-20260911.json)
+records a real limitation: both outputs received automatic PASS without discussing
+the task's explicit size targets, and the reference-conditioned output contained
+a visible forearm cutoff missed by QC. Neither result establishes that the scale
+problem is solved. Keep these cases for later coverage evaluation; passing schema
+validation and offline tests does not establish VLM judgment accuracy.

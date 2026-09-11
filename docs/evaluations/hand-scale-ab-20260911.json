@@ -1,0 +1,161 @@
+{
+  "source_run": "outputs/20260911T084157495290Z_box_lift_001_875a09cb",
+  "arms": {
+    "A": "original first frame plus explicit scale prompt",
+    "B": "Qwen reference edit adds visible hand, then Wan I2V"
+  },
+  "target_hand_length_over_box_height": 0.7,
+  "target_palm_width_over_box_front_width": 0.5,
+  "target_type": "approximate experimental visual targets; no inferred physical dimensions",
+  "controlled_video_parameters": {
+    "provider": "wan",
+    "model": "wan3.0-video",
+    "base_url": "https://dashscope.aliyuncs.com/api/v1",
+    "api_key_env": "DASHSCOPE_API_KEY",
+    "timeout_seconds": 120.0,
+    "video_options": {
+      "resolution": "720P",
+      "duration": 5,
+      "audio": false,
+      "prompt_extend": false,
+      "poll_interval_seconds": 15.0,
+      "task_timeout_seconds": 900.0,
+      "seed": 20260911
+    }
+  },
+  "sample_count_per_arm": 1,
+  "planned_image_generations": 1,
+  "planned_video_generations": 2,
+  "initial_hand_presence_differs": true,
+  "limitations": [
+    "initial hand presence and generated prompts differ",
+    "fixed seed does not guarantee deterministic output",
+    "single samples cannot establish model-level superiority"
+  ],
+  "first_frame_review": {
+    "B": "Reference scene appears preserved and right hand is visible with a gap. The generated hand still appears large relative to the box; the approved 0.7/0.5 targets are not visibly established. No precise physical or pixel measurement is claimed.",
+    "B_video_prompt_observation": "Prompt declares initial state matches the task and repeats targets, but does not flag the visibly questionable scale. This is not independent evidence that the first frame meets those targets."
+  },
+  "status": "completed",
+  "results": {
+    "A_prompt_only": {
+      "output_directory": "outputs/hand-scale-ab-20260911/A_prompt_only",
+      "automatic_qc_decision": "PASS",
+      "automatic_checks": {
+        "task_compliance": {
+          "status": "pass",
+          "reason": "The video starts with the box upright on the table and no hand visible (frame 0). A right hand enters from the right side (frame 3), approaches and grasps the box (frames 4-6), lifts it vertically off the table surface (frame 8 shows a gap and shadow below), and holds it in the air for the remainder of the clip (frames 9-15). The sequence of events matches the instruction.",
+          "evidence_frames": [
+            0,
+            3,
+            6,
+            8,
+            15
+          ]
+        },
+        "scene_consistency": {
+          "status": "pass",
+          "reason": "Comparing early (frame 0), middle (frame 8), and late (frame 15) frames, the background wall horizon, the table corner positions, and the black upper boundary remain pixel-aligned relative to the image frame. There is no evidence of zoom, pan, or tilt; the field of view and framing are constant throughout the clip. The box appearance and initial position are preserved before interaction.",
+          "evidence_frames": [
+            0,
+            8,
+            15
+          ]
+        },
+        "visual_anomalies": {
+          "status": "pass",
+          "reason": "The hand anatomy appears consistent without missing fingers or severe deformation during the grasp and lift. The box maintains its shape and texture without flickering or sudden identity changes. The shadow on the table corresponds reasonably to the hand and box position as they lift. No teleportation or abrupt temporal jumps are observed in the sampled frames.",
+          "evidence_frames": [
+            3,
+            6,
+            9,
+            12
+          ]
+        }
+      },
+      "video": {
+        "width": 1108,
+        "height": 832,
+        "frames": 150,
+        "fps": 30.0,
+        "audio_streams": 0,
+        "duration_seconds": 5.0
+      },
+      "started_at": "2026-09-11T09:01:24.601877+00:00",
+      "completed_at": "2026-09-11T09:03:57.176764+00:00",
+      "video_sha256": "1c216b2f23f47f1ea4a7231fe287b38b6eae9e9c206e7a15c0e5f3f75ab2e426",
+      "initial_image_sha256": "0f3d692a7b5b9e062aaddde603617381453a6c74e667c06c5cad370cdfe7cffe"
+    },
+    "B_hand_first_frame": {
+      "output_directory": "outputs/hand-scale-ab-20260911/B_hand_first_frame",
+      "automatic_qc_decision": "PASS",
+      "automatic_checks": {
+        "task_compliance": {
+          "status": "pass",
+          "reason": "The initial state in frame 0 shows the upright box and a right hand to its right with a clear gap. The hand approaches from the right (frames 5-6), grasps the box (frames 7-9), and lifts it vertically off the table, holding it in the air with a visible shadow gap underneath (frames 10-15). The sequence of events matches the instruction.",
+          "evidence_frames": [
+            0,
+            5,
+            7,
+            10,
+            15
+          ]
+        },
+        "scene_consistency": {
+          "status": "pass",
+          "reason": "Comparing early (frame 0), middle (frame 7), and late (frame 15) frames, the background wall horizon, table corner positions, and framing remain identical. The box size on the table before lifting (frame 0 vs frame 5) is consistent, indicating no zoom or camera movement. The shadow cast by the lifted hand/box in frame 10 aligns with the fixed lighting and camera position established in earlier frames.",
+          "evidence_frames": [
+            0,
+            7,
+            15
+          ]
+        },
+        "visual_anomalies": {
+          "status": "pass",
+          "reason": "The hand anatomy appears consistent throughout the grasp and lift. The box maintains its shape and texture without deformation. The transition from resting on the table to being held in the air (frame 9 to 10) shows a plausible vertical lift with the shadow separating from the object base appropriately. No teleportation or severe artifacts are observed.",
+          "evidence_frames": [
+            6,
+            9,
+            10,
+            12
+          ]
+        }
+      },
+      "video": {
+        "width": 1108,
+        "height": 832,
+        "frames": 150,
+        "fps": 30.0,
+        "audio_streams": 0,
+        "duration_seconds": 5.0
+      },
+      "started_at": "2026-09-11T09:00:43.189790+00:00",
+      "completed_at": "2026-09-11T09:03:33.716556+00:00",
+      "video_sha256": "1f066167d8d83daf754905e933ce2cf5ea3351fc92131465681c254a83959f34",
+      "initial_image_sha256": "439a51d605e66dca169aa8a7f668b8fa61a295c1247d5bf37d7aee28ac3cc258"
+    }
+  },
+  "actual_image_generations": 1,
+  "actual_video_generations": 2,
+  "actual_vlm_calls": 5,
+  "review": {
+    "reviewer_type": "assistant visual inspection, not human ground-truth annotation",
+    "A_reviewed_video_frame_ids": [
+      2,
+      5,
+      8,
+      15
+    ],
+    "B_reviewed_video_frame_ids": [
+      0,
+      5,
+      8,
+      10,
+      15
+    ],
+    "A": "Hand still appears large; the approximate 0.7/0.5 targets are not established. Grasp and lift are visible; no obvious fixed-camera violation in the inspected frames.",
+    "B": "Grasp-phase hand appears smaller than A, but target ratios remain unverified. The generated first frame has a forearm terminating inside the image with no visible occluder, and this cutoff persists through the sampled video. This is not an acceptable overall improvement.",
+    "automatic_qc_limitation": "Both outputs were marked PASS. Neither task-compliance explanation assesses the explicit ratio targets. B visual-anomalies PASS also misses the visible forearm cutoff. Preserve these results as failure cases; PASS does not establish experiment success.",
+    "conclusion": "Reference-conditioned T2I2V is connected and works end to end. Neither single-sample workflow demonstrates a reliable fix for the approved hand proportions. The initial image must be visually acceptable before relying on it to constrain video."
+  }
+}

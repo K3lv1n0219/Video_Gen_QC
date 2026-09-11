@@ -3,6 +3,7 @@ import json
 
 import httpx
 import pytest
+from PIL import Image
 from pydantic import ValidationError
 
 from video_gen_qc.config import ImageOptions, ProviderConfig, VideoOptions, load_config
@@ -155,6 +156,29 @@ def test_image_generation_download(image_config, initial_image, tmp_path):
     result = provider.generate("scene", tmp_path / "generated.png")
     assert result.read_bytes() == initial_image.read_bytes()
     assert len(calls) == 2
+
+
+@pytest.mark.parametrize("invalid", ["missing", "unreadable", "oversized"])
+def test_invalid_image_reference_never_submits(image_config, tmp_path, monkeypatch, invalid):
+    reference = tmp_path / "reference.png"
+    if invalid == "unreadable":
+        reference.write_text("not an image")
+    elif invalid == "oversized":
+        monkeypatch.setattr(
+            dashscope,
+            "encode_image",
+            lambda image: {"data_base64": base64.b64encode(b"x" * (10 * 1024 * 1024 + 1)).decode()},
+        )
+
+    def forbidden(request):
+        raise AssertionError("Invalid reference must be rejected before submitting")
+
+    provider = QwenImageGenerator(
+        image_config, allow_paid=True, transport=httpx.MockTransport(forbidden)
+    )
+    with pytest.raises(InputError, match="reference"):
+        provider.generate("scene", tmp_path / "generated.png", reference_image=reference)
+    assert not (tmp_path / "generated.png").exists()
 
 
 def test_wan_submits_once_actual_first_frame_and_polls(
@@ -313,14 +337,20 @@ def test_invalid_image_response(image_config, tmp_path, data):
         provider.generate("scene", tmp_path / "out.png")
 
 
+@pytest.mark.parametrize("with_reference", [False, True])
 def test_full_aliyun_pipeline_with_offline_transport(
-    task_path, initial_image, existing_video, tmp_path, monkeypatch
+    task_path, initial_image, existing_video, tmp_path, monkeypatch, with_reference
 ):
     config = load_config(task_path.parents[1] / "configs/aliyun-beijing.yaml")
     monkeypatch.setenv("DASHSCOPE_API_KEY", TEST_KEY)
     vlm_calls = []
     image_generations = []
     video_generations = []
+    reference = None
+    if with_reference:
+        reference = tmp_path / "reference.png"
+        Image.new("RGB", (640, 480), "blue").save(reference)
+        assert reference.read_bytes() != initial_image.read_bytes()
 
     def handler(request):
         if request.method == "POST":
@@ -333,7 +363,7 @@ def test_full_aliyun_pipeline_with_offline_transport(
                 if body["messages"][0]["content"] == QC_SYSTEM:
                     assert "GENERATION_SENTINEL" not in json.dumps(body)
                     images = [b for b in body["messages"][1]["content"] if b["type"] == "image_url"]
-                    assert len(images) == 17
+                    assert len(images) == 17 + int(with_reference)
                     report = {
                         "checks": {
                             name: {
@@ -372,11 +402,30 @@ def test_full_aliyun_pipeline_with_offline_transport(
         return original_client(**kwargs)
 
     monkeypatch.setattr(httpx, "Client", client)
-    output = run_generation(task_path, config, output_dir=tmp_path / "run", allow_paid=True)
+    output = run_generation(
+        task_path, config, reference_image=reference, output_dir=tmp_path / "run", allow_paid=True
+    )
     assert len(vlm_calls) == 3
     assert len(image_generations) == len(video_generations) == 1
     assert image_generations[0]["model"] == "qwen-image-3.0-pro"
     assert video_generations[0]["model"] == "wan3.0-video"
+    image_content = image_generations[0]["input"]["messages"][0]["content"]
+    assert image_content[-1] == {"text": "GENERATION_SENTINEL"}
+    if reference:
+        assert len(image_content) == 2
+        assert (
+            base64.b64decode(image_content[0]["image"].split(",", 1)[1]) == reference.read_bytes()
+        )
+    else:
+        assert len(image_content) == 1
+    video_prompt_images = [
+        item for item in vlm_calls[1]["messages"][1]["content"] if item["type"] == "image_url"
+    ]
+    assert (
+        base64.b64decode(video_prompt_images[0]["image_url"]["url"].split(",", 1)[1])
+        == initial_image.read_bytes()
+    )
+    assert len(video_generations[0]["input"]["media"]) == 1
     first_frame = video_generations[0]["input"]["media"][0]["url"]
     assert (
         base64.b64decode(first_frame.split(",", 1)[1])

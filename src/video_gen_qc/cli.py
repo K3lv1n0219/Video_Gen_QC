@@ -28,8 +28,12 @@ def parser() -> argparse.ArgumentParser:
     ]:
         command = commands.add_parser(name, help=help_text)
         command.add_argument("--task", type=Path, required=True)
-        command.add_argument("--initial-image", type=Path)
-        command.add_argument("--reference-image", type=Path)
+        command.add_argument("--initial-image", type=Path, help="Exact starting image; skips T2I")
+        command.add_argument(
+            "--reference-image",
+            type=Path,
+            help="Visual context; in full mode also passed to image generation for editing",
+        )
         command.add_argument(
             "--config", type=Path, help="YAML config; omitted = built-in mock defaults"
         )

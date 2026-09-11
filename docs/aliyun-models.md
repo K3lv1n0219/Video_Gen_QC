@@ -25,7 +25,7 @@
 | 专门视觉理解 | `qwen3-vl-plus`、`qwen3-vl-flash`；旧版 Qwen-VL、QVQ | 可作为后续 QC 对照，不能拿视觉理解模型名称直接生成图片 |
 | 开源权重系列 | Qwen3.8、Qwen3.6、Qwen3.5、Qwen3、Qwen2.5 及不同参数规模 | 部分可在百炼调用，也可研究自部署；模态和参数随具体版本变化 |
 | 编程与历史文本型号 | Qwen3-Coder、Qwen-Long、旧版 Max/Plus/Turbo、Qwen-Math、QwQ | 文本或专用任务；不默认具备视频质检所需能力 |
-| 千问图像生成、编辑 | Qwen Image 3.0 Pro/3.0、2.0 Pro/2.0、Image Max/Plus、Image Edit Max/Plus | 初始场景图；本次接入 3.0 的文生图路径 |
+| 千问图像生成、编辑 | Qwen Image 3.0 Pro/3.0、2.0 Pro/2.0、Image Max/Plus、Image Edit Max/Plus | 初始场景图；已接入 3.0 的文生图和单张参考图编辑 |
 | 其他阿里图像生成 | Wan 2.7 Image Pro/Image、Z-Image Turbo | 图像任务备选，尚未实现这些协议 |
 | 万相视频 | Wan 3.0 Video/Video Prime；历史 Wan 2.7/2.6/2.5/2.2/2.1 的 T2V、I2V、R2V 等型号 | 本次接入 Wan 3.0 首帧生视频；不同代际不能直接互换请求字段 |
 | 其他阿里视频模型 | HappyHorse 1.1 T2V/I2V/R2V、1.0 Video Edit | 视频生成、参考与编辑的后续对照，未接入 |
@@ -45,7 +45,7 @@
 | 环节 | 模型 | 请求方式 |
 | --- | --- | --- |
 | 初始图提示词、看首帧写视频提示词、独立 QC | `qwen3.8-max` | `/compatible-mode/v1/chat/completions`，每次独立 system/user，多图输入，QC 使用 JSON mode |
-| 初始场景图 | `qwen-image-3.0-pro` | `/api/v1/services/aigc/multimodal-generation/generation`，单张图同步返回 |
+| 初始场景图或参考图编辑 | `qwen-image-3.0-pro` | `/api/v1/services/aigc/multimodal-generation/generation`，单张图同步返回；可传入一张本地参考图 |
 | 首帧生视频 | `wan3.0-video` | `/api/v1/services/aigc/video-generation/video-synthesis`，提交后按 task ID 轮询 |
 
 选型理由是三段能力齐全、模型 ID 与官方 API 明确，并能沿用当前北京 Key。
@@ -67,6 +67,14 @@ Qwen Image 3.0 Pro 的 1K 输出约 0.25 元/张；Wan 3.0 的 720P 原价 0.6 �
 依据：[价格表](https://help.aliyun.com/zh/model-studio/model-pricing)。
 
 ## 接入边界与恢复
+
+完整模式下，`--reference-image` 的实际图片会进入 Qwen Image 的 `content.image`，
+再用生成的 `initial_image.png` 作为 Wan 的首帧。若同时提供 `--initial-image`，
+则跳过生图，参考图只用于 VLM 提示词和 QC 上下文。Wan 的 `first_frame` 与
+`reference_image` 等参考媒体字段不能混用；当前没有实现额外参考图的 R2V 模式。
+因此，用带手图片约束大小时，手会在视频第一帧中可见，需要任务允许这种初始状态。
+依据：[Qwen Image API](https://help.aliyun.com/zh/model-studio/qwen-image-generation-and-editing-api-reference)、
+[Wan 模式说明](https://help.aliyun.com/zh/model-studio/wan3-video-generation-guide)。
 
 已实现的媒体型号是 `qwen-image-3.0-pro` / `qwen-image-3.0` 与
 `wan3.0-video` / `wan3.0-video-prime`。目录中的其他型号只是调研备选，
