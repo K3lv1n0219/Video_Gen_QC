@@ -7,6 +7,12 @@ from video_gen_qc.providers.mock import MockImageGenerator, MockVideoGenerator
 
 
 @pytest.fixture(autouse=True)
+def ignore_personal_dotenv(monkeypatch):
+    # Tests must not load the user's real local credentials. Environment tests opt back in.
+    monkeypatch.setenv("PYTHON_DOTENV_DISABLED", "1")
+
+
+@pytest.fixture(autouse=True)
 def no_external_network(monkeypatch):
     def blocked(*args, **kwargs):
         raise AssertionError("Tests must not open network connections")

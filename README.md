@@ -77,7 +77,7 @@ video-qc --help
 ```
 
 Alternatively: `uv venv` and `uv pip install -e '.[dev]'`. Dependencies are PyAV,
-Pillow, Pydantic, PyYAML, and HTTPX; development checks use pytest and Ruff. PyAV
+Pillow, Pydantic, PyYAML, HTTPX, and python-dotenv; development checks use pytest and Ruff. PyAV
 wheels include video codec libraries on supported platforms, so no separate
 `ffmpeg` command is required. Initial installation needs package access; subsequent
 mock runs and tests need neither network access nor API credentials.
@@ -249,8 +249,8 @@ output:
   root: outputs
 ```
 
-Set those environment variables using your shell or secret manager; the CLI does
-not load `.env` files. Then explicitly permit the configured real call:
+Set those environment variables using your shell, secret manager, or a project-local
+`.env` file (see persistent configuration below). Then explicitly permit the real call:
 
 ```bash
 video-qc judge --config configs/real.yaml --allow-paid \
@@ -275,14 +275,16 @@ vlm:
   max_tokens: 4096
 ```
 
-Set `DASHSCOPE_API_KEY` in the process environment. For interactive Bash/zsh,
-the following reads the key without echoing it or putting its value in the command:
+To save your Key locally once, run this command from the project directory and
+paste the current Key at the hidden prompt:
 
 ```bash
-read -r -s DASHSCOPE_API_KEY
-export DASHSCOPE_API_KEY
+video-qc configure
 ```
 
+The command creates or updates `.env`, preserves other entries/comments, and gives
+the file owner-only permissions (`0600`). It prints only the file path, never the Key.
+Future CLI invocations load it into the process environment automatically.
 Then opt in to a real inspection:
 
 ```bash
@@ -313,6 +315,31 @@ The adapter and wire format are tested with offline transports. No real key or
 live service response is used in the test suite, and no account/model-access or
 judgment-accuracy claim follows from passing these tests. `max_tokens` controls
 Qwen completion length; increase it if the service reports truncation.
+
+### Persistent local configuration
+
+Model names, endpoints, and frame counts remain in YAML. Keys stay in `.env` and
+reach providers only through environment variables. `.env` is ignored by Git;
+`.env.example` contains empty placeholders and may be committed. You can also copy
+the example and edit `.env` manually. This file is local plaintext with restricted
+permissions, so keep it outside artifacts or shared files.
+
+For `run` and `judge`, the CLI locates the repository root from the selected
+`--config` file, or from the working directory when no config is supplied. It loads
+that root's `.env`. If no project root is found, only the config file's directory
+(or the working directory) is checked; unrelated ancestor `.env` files are not loaded.
+This works after moving the repository; no machine-specific paths are hard-coded.
+
+Use `--env-file /path/to/local.env` on `run`, `judge`, or `configure` to select a
+different file. An explicitly selected input file must exist. A missing automatic
+`.env` is allowed, so offline defaults still work immediately after installation.
+Existing shell variables take precedence, including empty values; unset a stale
+shell variable to use the saved value. Set `PYTHON_DOTENV_DISABLED=1` to disable
+loading. Values are parsed as data without shell execution or variable expansion.
+Direct Python callers can explicitly call `video_gen_qc.environment.load_environment`.
+
+Saving a Key does not enable real providers or bypass `--allow-paid`. Tests disable
+personal `.env` discovery and use temporary test files for persistence checks.
 
 ### Generic HTTP bridge
 
