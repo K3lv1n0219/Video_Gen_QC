@@ -177,6 +177,18 @@ fingers; hidden contact is not incorrect contact. Large changes across widely
 spaced samples alone do not establish an abrupt temporal jump. The VLM is instructed
 to use `uncertain` when evidence is insufficient and never certify hidden physics.
 
+For a fixed-camera task, camera position, orientation, focal length, field of view,
+framing and crop must remain fixed. A smooth zoom or push-in is a scene-consistency
+violation even when the wall/table identity is unchanged and the action succeeds.
+The video-prompt instruction preserves these restrictions. QC compares stationary
+background boundaries and table edges across early/middle/late samples, including
+pre-contact frames, and describes concrete frame comparisons. Foreground motion or
+shadow changes alone do not establish camera movement. Insufficient background
+evidence calls for `uncertain`. A `scene_consistency` pass must cite at least two
+distinct sampled frames; the validator rejects single-frame claims of consistency.
+These instructions and evidence checks do not guarantee that a VLM detects every
+violation. Keep human-identified false passes as evaluation cases.
+
 Evidence refers to sampled **`frame_id`**, not source indices or still-image labels.
 Nonexistent, negative, duplicate, boolean, or string IDs are rejected. Pass/fail
 requires a cited sample; uncertain may have an empty list. Malformed JSON, missing

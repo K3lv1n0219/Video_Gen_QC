@@ -1,0 +1,32 @@
+{
+  "checked_on": "2026-09-11",
+  "model": "qwen3.8-max",
+  "case": {
+    "source_run": "20260911T082227313926Z_box_lift_001_53472a99",
+    "video_sha256": "77757a9eee8432650434e8f6bf64a39ef3a83fb642fa232cb330b009b1cde58a",
+    "old_decision": "PASS",
+    "expected_scene_consistency": "fail",
+    "actual_scene_consistency": "fail",
+    "new_decision": "REJECT",
+    "comparison_frames": [
+      0,
+      2,
+      4,
+      15
+    ]
+  },
+  "static_control": {
+    "construction": "150 repetitions of source sampled frame 0, encoded locally",
+    "expected_scene_consistency": "pass",
+    "actual_scene_consistency": "pass",
+    "expected_task_compliance": "fail",
+    "actual_task_compliance": "fail"
+  },
+  "live_requests": {
+    "qc_calls": 2,
+    "video_prompt_calls": 1,
+    "image_generation_calls": 0,
+    "video_generation_calls": 0
+  },
+  "limits": "One identified camera-motion miss and one static control. Does not establish general VLM accuracy or guarantee generator camera compliance."
+}
