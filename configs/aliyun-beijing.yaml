@@ -1,0 +1,35 @@
+# Full real pipeline, explicit opt-in with --allow-paid.
+# All three providers read ONE project .env entry: DASHSCOPE_API_KEY.
+vlm:
+  provider: qwen
+  model: qwen3.8-max
+  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  api_key_env: DASHSCOPE_API_KEY
+  timeout_seconds: 180.0
+  max_tokens: 4096
+image_generation:
+  provider: qwen_image
+  model: qwen-image-3.0-pro
+  base_url: https://dashscope.aliyuncs.com/api/v1
+  api_key_env: DASHSCOPE_API_KEY
+  timeout_seconds: 600.0
+  image_options:
+    size: 1024*1024
+    prompt_extend: false
+video_generation:
+  provider: wan
+  model: wan3.0-video
+  base_url: https://dashscope.aliyuncs.com/api/v1
+  api_key_env: DASHSCOPE_API_KEY
+  timeout_seconds: 120.0
+  video_options:
+    resolution: 720P
+    duration: 5
+    audio: false
+    prompt_extend: false
+    poll_interval_seconds: 15.0
+    task_timeout_seconds: 900.0
+qc:
+  sample_frames: 16
+output:
+  root: outputs

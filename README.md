@@ -260,9 +260,9 @@ video-qc judge --config configs/real.yaml --allow-paid \
 ### Direct Qwen VLM (Alibaba Cloud, China North 2 / Beijing)
 
 Use [`configs/qwen-beijing.yaml`](configs/qwen-beijing.yaml) to call Qwen directly;
-no bridge server or additional SDK is needed. This configuration uses
-`qwen3-vl-plus` for the three isolated VLM operations and keeps image/video generation
-as mock providers. Qwen here supplies vision/text reasoning, not media generation.
+no bridge server or additional SDK is needed. This configuration selects a vision
+model for the three isolated VLM operations and keeps image/video generation
+as mock providers. The `qwen` provider supplies vision/text reasoning.
 For a useful first real inspection, supply an existing video with `judge`.
 
 ```yaml
@@ -315,6 +315,85 @@ The adapter and wire format are tested with offline transports. No real key or
 live service response is used in the test suite, and no account/model-access or
 judgment-accuracy claim follows from passing these tests. `max_tokens` controls
 Qwen completion length; increase it if the service reports truncation.
+
+### Full Alibaba Cloud pipeline: Qwen + Qwen Image + Wan
+
+[`configs/aliyun-beijing.yaml`](configs/aliyun-beijing.yaml) selects three real models:
+
+| Stage | Provider | Model |
+| --- | --- | --- |
+| Image prompt, image-conditioned video prompt, independent QC | `qwen` | `qwen3.8-max` |
+| Initial-state image | `qwen_image` | `qwen-image-3.0-pro` |
+| Video conditioned on that exact image | `wan` | `wan3.0-video` |
+
+All three read **the same `DASHSCOPE_API_KEY`** from the project `.env`. A key can
+authorize multiple models; access depends on its workspace and region. The model
+catalogue and choices are explained in [the Alibaba model guide](docs/aliyun-models.md).
+The compatible Chat API uses `/compatible-mode/v1`; native image/video APIs use
+`/api/v1`. These are separate paths on the same regional service. No extra SDK is needed.
+
+From the repository with the local Key already saved:
+
+```bash
+video-qc run --config configs/aliyun-beijing.yaml --allow-paid \
+  --task examples/box_lift.json
+```
+
+This requests one 1024×1024 PNG and one 5-second 720P video, with audio off, then
+inspects 16 sampled frames. It makes three independent VLM calls, one synchronous
+image-generation request, and one asynchronous video submission. Provider prompt
+rewriting is disabled so the saved VLM prompts are the generation inputs. QC still
+receives only the original task and actual visual evidence, not either prompt.
+Using the same VLM for prompting and QC does not establish evaluator accuracy or
+remove possible model-family bias; evaluate that separately with labelled examples.
+
+Change `image_generation.model` between `qwen-image-3.0-pro` and `qwen-image-3.0`,
+or `video_generation.model` between `wan3.0-video` and `wan3.0-video-prime`. Older
+Qwen Image and Wan versions can use different request schemas and are not accepted
+by these media adapters. Other vision models can be configured in `vlm.model` when
+they support images, non-thinking Chat requests, and JSON output.
+
+`image_options` controls size, prompt rewriting and optional seed. `video_options`
+controls resolution, duration (2–30 seconds), audio, prompt rewriting, optional seed,
+polling interval and task wait timeout. Image count is fixed at one. Video aspect
+ratio follows the actual first frame. File size, duration and input-image constraints
+are checked; final video decoding occurs before the QC request.
+
+Wan is submitted once and queried every 15 seconds, for up to 900 seconds by default.
+`video_generation_job.json` preserves the model, task ID and last service status as
+soon as a job is accepted. Timeout, service failure or download failure never causes
+resubmission or a mock fallback. The image request has a 600-second HTTP timeout;
+an ambiguous timeout must be checked in the console before another paid generation.
+
+To recover an existing Wan job, use its saved task ID with the provider's `resume`
+method. This only queries and downloads; it never submits a new video. Run from the
+repository and substitute the directory of the failed run:
+
+```python
+import json
+from pathlib import Path
+from video_gen_qc.config import load_config
+from video_gen_qc.environment import load_environment
+from video_gen_qc.providers.dashscope import WanVideoGenerator
+
+config_path = Path("configs/aliyun-beijing.yaml")
+load_environment(config_path)
+config = load_config(config_path)
+run = Path("outputs/your-failed-run")
+job = json.loads((run / "video_generation_job.json").read_text())
+provider = WanVideoGenerator(config.video_generation, allow_paid=True)
+provider.resume(job["task_id"], run / "video.mp4")
+```
+
+Use `video-qc judge` on the recovered video to create a new independent QC report.
+The earlier error record is preserved. Resuming requires the original region,
+workspace and Key; service task IDs and result URLs expire after 24 hours.
+Downloads use no API credential headers, do not follow redirects, have bounded
+size, and are saved locally. Signed result URLs and service error bodies are omitted
+from logs and metadata. Tests use offline HTTP transports, never personal keys.
+
+API references: [Qwen Image 3.0](https://help.aliyun.com/zh/model-studio/qwen-image-generation-and-editing-api-reference),
+[Wan 3.0](https://help.aliyun.com/zh/model-studio/wan3-video-generation-api-reference).
 
 ### Persistent local configuration
 
