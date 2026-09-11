@@ -257,6 +257,65 @@ video-qc judge --config configs/real.yaml --allow-paid \
   --task examples/box_lift.json --video path/to/video.mp4
 ```
 
+### Direct Qwen VLM (Alibaba Cloud, China North 2 / Beijing)
+
+Use [`configs/qwen-beijing.yaml`](configs/qwen-beijing.yaml) to call Qwen directly;
+no bridge server or additional SDK is needed. This configuration uses
+`qwen3-vl-plus` for the three isolated VLM operations and keeps image/video generation
+as mock providers. Qwen here supplies vision/text reasoning, not media generation.
+For a useful first real inspection, supply an existing video with `judge`.
+
+```yaml
+vlm:
+  provider: qwen
+  model: qwen3-vl-plus
+  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  api_key_env: DASHSCOPE_API_KEY
+  timeout_seconds: 120.0
+  max_tokens: 4096
+```
+
+Set `DASHSCOPE_API_KEY` in the process environment. For interactive Bash/zsh,
+the following reads the key without echoing it or putting its value in the command:
+
+```bash
+read -r -s DASHSCOPE_API_KEY
+export DASHSCOPE_API_KEY
+```
+
+Then opt in to a real inspection:
+
+```bash
+video-qc judge --config configs/qwen-beijing.yaml --allow-paid \
+  --task examples/box_lift.json --video path/to/video.mp4
+```
+
+`base_url` is the compatible API root; the adapter appends `/chat/completions`.
+Alternatively, omit `base_url` and use `endpoint_env` to name an environment variable
+containing the full POST URL. Configuring both is rejected. For a workspace-specific
+Beijing endpoint, replace the base URL with
+`https://<WorkspaceId>.cn-beijing.maas.aliyuncs.com/compatible-mode/v1`.
+The configured legacy Beijing domain remains supported according to the
+[official Qwen vision API documentation](https://help.aliyun.com/zh/model-studio/qwen-vl-compatible-with-openai).
+Keep the key and endpoint in the same region; model access still depends on the account.
+
+Every request sends only a fresh system/user pair. Actual PNG bytes are encoded as
+data URLs, each preceded by its image/frame label. The adapter uses non-streaming,
+non-thinking mode and requests `response_format: {type: json_object}` for QC only,
+following the [structured-output documentation](https://help.aliyun.com/zh/model-studio/qwen-structured-output).
+Other vision models must support these options. Prompt generation returns plain text.
+Only final `message.content` is returned; reasoning content is not propagated.
+Truncation, refusal, malformed responses, and HTTP failures are runtime errors.
+Normal QC JSON is still saved and validated by the independent QC module; JSON
+mode does not replace schema/evidence validation or determine the overall decision.
+
+The adapter and wire format are tested with offline transports. No real key or
+live service response is used in the test suite, and no account/model-access or
+judgment-accuracy claim follows from passing these tests. `max_tokens` controls
+Qwen completion length; increase it if the service reports truncation.
+
+### Generic HTTP bridge
+
 `http` implements a **provider-neutral bridge contract defined by this project**.
 It is not a drop-in vendor endpoint. Supply a compatible service, or implement the
 small interfaces in `providers/base.py` for a chosen vendor and register them in

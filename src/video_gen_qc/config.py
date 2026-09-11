@@ -9,11 +9,13 @@ from video_gen_qc.schemas import NonEmpty, StrictModel
 
 
 class ProviderConfig(StrictModel):
-    provider: Literal["mock", "http"] = "mock"
+    provider: Literal["mock", "http", "qwen"] = "mock"
     model: NonEmpty | None = None
+    base_url: NonEmpty | None = None
     endpoint_env: NonEmpty | None = None
     api_key_env: NonEmpty | None = None
     timeout_seconds: float = Field(default=120.0, gt=0, allow_inf_nan=False)
+    max_tokens: int = Field(default=4096, gt=0)
 
 
 class QCConfig(StrictModel):

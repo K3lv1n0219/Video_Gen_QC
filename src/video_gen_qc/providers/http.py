@@ -38,12 +38,14 @@ class HTTPBridge:
         *,
         allow_paid: bool,
         transport: httpx.BaseTransport | None = None,
+        endpoint: str | None = None,
     ):
         if not allow_paid:
             raise ConfigError("Real HTTP providers require explicit --allow-paid (including VLM).")
-        if not config.endpoint_env or not config.api_key_env:
-            raise ConfigError("HTTP provider requires endpoint_env and api_key_env configuration.")
-        endpoint = os.environ.get(config.endpoint_env, "").strip()
+        if (endpoint is None and not config.endpoint_env) or not config.api_key_env:
+            raise ConfigError("HTTP provider requires an endpoint and api_key_env configuration.")
+        if endpoint is None:
+            endpoint = os.environ.get(config.endpoint_env, "").strip()
         token = os.environ.get(config.api_key_env, "").strip()
         if not endpoint:
             raise ConfigError(
