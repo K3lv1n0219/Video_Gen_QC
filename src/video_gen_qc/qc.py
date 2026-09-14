@@ -38,6 +38,15 @@ def validate_judgment(raw: str, sampled_ids: set[int]) -> CheckSet:
             raise JudgmentError(f"{name} contains duplicate evidence frame IDs.")
         if check.status != "uncertain" and not check.evidence_frames:
             raise JudgmentError(f"{name}: pass/fail requires at least one sampled evidence frame.")
+        if (
+            name == "scene_consistency"
+            and check.status == "pass"
+            and len(check.evidence_frames) < 2
+        ):
+            raise JudgmentError(
+                "scene_consistency: pass requires comparison of at least two sampled frames; "
+                "insufficient temporal evidence should be uncertain."
+            )
     return judgment.checks
 
 

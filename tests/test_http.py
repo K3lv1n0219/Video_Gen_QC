@@ -113,6 +113,24 @@ def test_media_bridge_decodes_actual_content(
         assert path.read_bytes() == source.read_bytes()
 
 
+def test_image_bridge_forwards_reference_pixels(http_config, initial_image, tmp_path):
+    def handler(request):
+        body = json.loads(request.content)
+        assert body["reference_image"]["label"] == "reference_image"
+        assert (
+            base64.b64decode(body["reference_image"]["data_base64"]) == initial_image.read_bytes()
+        )
+        return httpx.Response(
+            200, json={"image_base64": base64.b64encode(initial_image.read_bytes()).decode()}
+        )
+
+    bridge = HTTPBridge(http_config, allow_paid=True, transport=httpx.MockTransport(handler))
+    result = HTTPImageGenerator(bridge).generate(
+        "edit scene", tmp_path / "edited.png", reference_image=initial_image
+    )
+    assert result.is_file()
+
+
 @pytest.mark.parametrize("kind", ["status", "timeout", "invalid_json", "empty_text"])
 def test_service_errors_never_become_mock_success(http_config, kind):
     def handler(request):

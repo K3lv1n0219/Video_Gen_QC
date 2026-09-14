@@ -1,0 +1,17 @@
+# Explicit opt-in: real Qwen VLM; generation remains mock.
+# Requires DASHSCOPE_API_KEY in the process environment and --allow-paid.
+vlm:
+  provider: qwen
+  model: qwen3-vl-plus
+  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  api_key_env: DASHSCOPE_API_KEY
+  timeout_seconds: 120.0
+  max_tokens: 4096
+image_generation:
+  provider: mock
+video_generation:
+  provider: mock
+qc:
+  sample_frames: 16
+output:
+  root: outputs

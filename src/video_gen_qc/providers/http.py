@@ -38,12 +38,14 @@ class HTTPBridge:
         *,
         allow_paid: bool,
         transport: httpx.BaseTransport | None = None,
+        endpoint: str | None = None,
     ):
         if not allow_paid:
             raise ConfigError("Real HTTP providers require explicit --allow-paid (including VLM).")
-        if not config.endpoint_env or not config.api_key_env:
-            raise ConfigError("HTTP provider requires endpoint_env and api_key_env configuration.")
-        endpoint = os.environ.get(config.endpoint_env, "").strip()
+        if (endpoint is None and not config.endpoint_env) or not config.api_key_env:
+            raise ConfigError("HTTP provider requires an endpoint and api_key_env configuration.")
+        if endpoint is None:
+            endpoint = os.environ.get(config.endpoint_env, "").strip()
         token = os.environ.get(config.api_key_env, "").strip()
         if not endpoint:
             raise ConfigError(
@@ -140,8 +142,15 @@ class HTTPImageGenerator(ImageGenerator):
     def __init__(self, bridge: HTTPBridge):
         self.bridge = bridge
 
-    def generate(self, prompt: str, output_path: Path) -> Path:
-        data = self.bridge.post({"purpose": "image_generation", "prompt": prompt})
+    def generate(
+        self, prompt: str, output_path: Path, *, reference_image: Path | None = None
+    ) -> Path:
+        payload = {"purpose": "image_generation", "prompt": prompt}
+        if reference_image is not None:
+            payload["reference_image"] = encode_image(
+                ImageInput("reference_image", reference_image)
+            )
+        data = self.bridge.post(payload)
         content = decode_media(data, "image_base64")
         try:
             with Image.open(io.BytesIO(content)) as image:

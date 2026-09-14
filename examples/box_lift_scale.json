@@ -1,0 +1,19 @@
+{
+  "task_id": "box_lift_scale",
+  "instruction": "A right hand approaches the upright box from the right, grasps it, lifts it vertically from the table, and briefly holds it in the air.",
+  "scene_constraints": [
+    "The camera remains fixed for the entire clip: constant position, orientation, focal length, field of view, framing and crop; no zoom or reframing.",
+    "The background and table remain unchanged; preserve the reference scene composition and box appearance, position and size before lifting.",
+    "Desired visual proportion: wrist-to-middle-fingertip hand length is approximately 0.7 times the upright box height, and palm width (excluding spread fingers) is approximately 0.5 times the box front width. These are experimental relative targets, not known real-world dimensions.",
+    "Keep the hand and box at comparable depth when showing their scale. Do not enlarge the box, change the camera or move the hand toward the lens to satisfy the ratios. Maintain the same hand size through the action."
+  ],
+  "initial_state_constraints": [
+    "The box is upright on the table.",
+    "A single right hand is already visible to the right of the box, at comparable depth, with fingers relaxed and sufficiently extended to show its proportions. It has a clear gap from the box and is not touching it."
+  ],
+  "required_events": [
+    "The hand approaches the box from the right.",
+    "The hand grasps the box.",
+    "The box leaves the table in a vertical lift and is briefly held in the air."
+  ]
+}

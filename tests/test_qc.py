@@ -42,6 +42,32 @@ def test_uncertain_may_have_no_evidence():
     assert aggregate(checks) == "REVIEW"
 
 
+@pytest.mark.parametrize("sampled_ids", [{0}, {0, 2, 4}])
+def test_scene_consistency_pass_requires_temporal_evidence(sampled_ids):
+    data = response(("uncertain", "pass", "uncertain"), evidence=[0])
+    with pytest.raises(JudgmentError, match="at least two sampled frames"):
+        validate_judgment(json.dumps(data), sampled_ids)
+
+
+def test_visible_scene_violation_can_reject_even_when_action_succeeds():
+    data = response()
+    data["checks"]["scene_consistency"] = {
+        "status": "fail",
+        "reason": "Before contact, the table corner exits the view as the untouched box grows.",
+        "evidence_frames": [0, 2],
+    }
+    checks = validate_judgment(json.dumps(data), {0, 2, 4})
+    assert checks.task_compliance.status == "pass"
+    assert aggregate(checks) == "REJECT"
+
+
+def test_single_frame_scene_failure_is_still_valid():
+    # Identity/background violations can be established from one frame and the
+    # original task, unlike a claim of temporal consistency.
+    checks = validate_judgment(json.dumps(response(("uncertain", "fail", "uncertain"), [0])), {0})
+    assert aggregate(checks) == "REJECT"
+
+
 @pytest.mark.parametrize("modification", ["decision", "missing_check", "confidence", "status"])
 def test_rejects_unexpected_or_missing_fields(modification):
     data = response()

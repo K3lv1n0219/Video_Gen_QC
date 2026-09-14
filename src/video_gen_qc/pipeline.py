@@ -111,7 +111,10 @@ def run_generation(
                 ),
                 run_dir,
             )
-            generated = image_generator.generate(prompt, initial)
+            if reference is not None:
+                generated = image_generator.generate(prompt, initial, reference_image=reference)
+            else:
+                generated = image_generator.generate(prompt, initial)
             if generated != initial or not initial.is_file():
                 raise ProviderError("Image provider did not write the requested output file.")
             # Validate the actual image before using it in the next VLM call.

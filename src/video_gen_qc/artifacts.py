@@ -61,7 +61,8 @@ def run_record(path: Path, task: dict, config: dict, mode: str, inputs: dict, ac
         "package_version": __version__,
         "python_version": platform.python_version(),
         "dependency_versions": {
-            name: version(name) for name in ("av", "Pillow", "pydantic", "PyYAML", "httpx")
+            name: version(name)
+            for name in ("av", "Pillow", "pydantic", "PyYAML", "httpx", "python-dotenv")
         },
         "mode": mode,
         "started_at": utc_now(),
