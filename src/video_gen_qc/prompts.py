@@ -48,6 +48,34 @@ visible in the initial image, preserve its visible scale while describing the
 required motion; report a visible conflict rather than silently changing the task.
 Do not enlarge the object, alter the camera, or move the hand toward the lens to
 satisfy a size constraint. Do not invent centimetre measurements from the image.
+
+Constrain hand motion explicitly in the returned video prompt, not merely with
+adjectives such as "smooth", "natural", or "stable". Use only the movements needed
+to perform the original task. Do not add expressive gestures or idle micro-motions
+for realism. For a single approach-grasp-lift-hold task, describe these phases:
+- Approach: one continuous, direct, unobstructed approach from the actual starting
+  pose. Keep a consistent wrist orientation and a suitable pre-grasp finger pose;
+  allow only the finger opening needed to fit the object. No exploratory hovering,
+  back-and-forth corrections, circling, tapping, finger wiggling, or practice grasps.
+- Grasp: after reaching the contact position, close the fingers once in one
+  coordinated motion to establish the grip. Then keep the same contact locations
+  relative to the object. No repeated squeezing, release-and-regrasp, finger
+  crawling, sliding along the surface, or alternating finger adjustments.
+- Lift: begin after the grip is established. Move the hand and object together
+  along the task's specified direction; for a vertical lift, rise monotonically
+  without lateral wandering, bobbing, wrist rolling, or unrequested object rotation.
+  Preserve the grasp pose and hand-object relationship throughout the lift.
+- Hold: smoothly decelerate once into the requested final position, then maintain
+  that position, wrist orientation, and finger configuration for the requested
+  hold, or to the end of the clip if no subsequent event is required. No tremor,
+  swaying, repeated settling, grip readjustment, or small demonstration gestures.
+Use smooth transitions between these phases, not abrupt pose snaps or a frozen
+hand throughout the action. Do not invent precise timestamps, speeds, or pauses.
+State the relevant allowed motion and exclusions concretely in the final prompt.
+These are defaults for suppressing UNREQUESTED movement, not universal prohibitions:
+preserve any rotation, shaking, tapping, regrasping, release, repeated action,
+obstacle avoidance, or later event explicitly required by the original task.
+Adapt or omit inapplicable phases; never force a lift-and-hold onto another task.
 """
 
 QC_SYSTEM = """You independently judge observable video quality and task compliance.
